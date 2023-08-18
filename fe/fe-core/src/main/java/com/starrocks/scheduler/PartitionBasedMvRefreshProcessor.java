@@ -1197,7 +1197,7 @@ public class PartitionBasedMvRefreshProcessor extends BaseTaskRunProcessor {
                                 getPartitionKeyRange(table, partitionColumn);
                         return SyncPartitionUtils.hasRangePartitionChanged(snapshotPartitionMap, currentPartitionMap);
                     }
-                } else if (snapshotTable.isIcebergTable()) {
+                } else if (snapshotTable.isIcebergTable() || snapshotTable.isPaimonTable()) {
                     IcebergTable snapShotIcebergTable = (IcebergTable) snapshotTable;
                     if (snapShotIcebergTable.isUnPartitioned()) {
                         if (!table.isUnPartitioned()) {

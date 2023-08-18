@@ -39,6 +39,7 @@ import com.starrocks.catalog.JDBCTable;
 import com.starrocks.catalog.MaterializedView;
 import com.starrocks.catalog.MysqlTable;
 import com.starrocks.catalog.OlapTable;
+import com.starrocks.catalog.PaimonTable;
 import com.starrocks.catalog.PartitionInfo;
 import com.starrocks.catalog.PrimitiveType;
 import com.starrocks.catalog.RangePartitionInfo;
@@ -715,6 +716,8 @@ public class MaterializedViewAnalyzer {
                 checkPartitionColumnWithBaseIcebergTable(slotRef, (IcebergTable) table);
             } else if (table.isJDBCTable()) {
                 checkPartitionColumnWithBaseJDBCTable(slotRef, (JDBCTable) table);
+            } else if (table.isPaimonTable()) {
+                checkPartitionColumnWithBasePaimonTable(slotRef, (PaimonTable) table);
             } else {
                 throw new SemanticException("Materialized view with partition does not support base table type : %s",
                         table.getType());
@@ -797,6 +800,26 @@ public class MaterializedViewAnalyzer {
             }
         }
 
+        private void checkPartitionColumnWithBasePaimonTable(SlotRef slotRef, PaimonTable table) {
+            if (table.isUnPartitioned()) {
+                throw new SemanticException("Materialized view partition column in partition exp " +
+                        "must be base table partition column");
+            } else {
+                boolean found = false;
+                for (String partitionColumnName : table.getPartitionColumnNames()) {
+                    if (partitionColumnName.equalsIgnoreCase(slotRef.getColumnName())) {
+                        checkPartitionColumnType(table.getColumn(partitionColumnName));
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    throw new SemanticException("Materialized view partition column in partition exp " +
+                            "must be base table partition column");
+                }
+            }
+        }
+
         private SlotRef getSlotRef(Expr expr) {
             if (expr instanceof SlotRef) {
                 return ((SlotRef) expr);
@@ -834,6 +857,15 @@ public class MaterializedViewAnalyzer {
                     IcebergTable icebergTable = (IcebergTable) table;
                     if (icebergTable.getCatalogName().equals(baseTableInfo.getCatalogName()) &&
                             icebergTable.getRemoteDbName().equals(baseTableInfo.getDbName()) &&
+                            table.getTableIdentifier().equals(baseTableInfo.getTableIdentifier())) {
+                        slotRef.setTblName(new TableName(baseTableInfo.getCatalogName(),
+                                baseTableInfo.getDbName(), table.getName()));
+                        break;
+                    }
+                } else if (table.isPaimonTable()){
+                    PaimonTable paimonTable = (PaimonTable) table;
+                    if (paimonTable.getCatalogName().equals(baseTableInfo.getCatalogName()) &&
+                            paimonTable.getDbName().equals(baseTableInfo.getDbName()) &&
                             table.getTableIdentifier().equals(baseTableInfo.getTableIdentifier())) {
                         slotRef.setTblName(new TableName(baseTableInfo.getCatalogName(),
                                 baseTableInfo.getDbName(), table.getName()));

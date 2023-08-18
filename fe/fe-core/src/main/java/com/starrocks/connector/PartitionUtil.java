@@ -43,6 +43,8 @@ import com.starrocks.catalog.JDBCPartitionKey;
 import com.starrocks.catalog.JDBCTable;
 import com.starrocks.catalog.NullablePartitionKey;
 import com.starrocks.catalog.OlapTable;
+import com.starrocks.catalog.PaimonPartitionKey;
+import com.starrocks.catalog.PaimonTable;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.PrimitiveType;
 import com.starrocks.catalog.Table;
@@ -107,6 +109,9 @@ public class PartitionUtil {
                 break;
             case JDBC:
                 partitionKey = new JDBCPartitionKey();
+                break;
+            case PAIMON:
+                partitionKey = new PaimonPartitionKey();
                 break;
             default:
                 Preconditions.checkState(false, "Do not support create partition key for " +
@@ -255,6 +260,14 @@ public class PartitionUtil {
             if (partitionNames.size() == 0) {
                 return Lists.newArrayList(jdbcTable.getJdbcTable());
             }
+        }else if (table.isPaimonTable()) {
+            PaimonTable paimonTable = (PaimonTable) table;
+            if (paimonTable.isUnPartitioned()) {
+                // return table name if table is unpartitioned
+                return Lists.newArrayList(paimonTable.getTableName());
+            }
+            partitionNames = GlobalStateMgr.getCurrentState().getMetadataMgr().listPartitionNames(
+                    paimonTable.getCatalogName(), paimonTable.getDbName(), paimonTable.getTableName());
         } else {
             Preconditions.checkState(false, "Do not support get partition names and columns for" +
                     "table type %s", table.getType());
@@ -296,6 +309,9 @@ public class PartitionUtil {
         } else if (table.isJDBCTable()) {
             JDBCTable jdbcTable = (JDBCTable) table;
             partitionColumns = jdbcTable.getPartitionColumns();
+        } else if (table.isPaimonTable()) {
+            PaimonTable paimonTable = (PaimonTable) table;
+            partitionColumns = paimonTable.getPartitionColumns();
         } else {
             Preconditions.checkState(false, "Do not support get partition names and columns for" +
                     "table type %s", table.getType());
@@ -314,7 +330,7 @@ public class PartitionUtil {
             throws UserException {
         if (table.isNativeTableOrMaterializedView()) {
             return ((OlapTable) table).getRangePartitionMap();
-        } else if (table.isHiveTable() || table.isHudiTable() || table.isIcebergTable() || table.isJDBCTable()) {
+        } else if (table.isHiveTable() || table.isHudiTable() || table.isIcebergTable() || table.isJDBCTable() || table.isPaimonTable()) {
             return PartitionUtil.getRangePartitionMapOfExternalTable(table, partitionColumn, getPartitionNames(table));
         } else {
             throw new DmlException("Can not get partition range from table with type : %s", table.getType());
@@ -325,7 +341,7 @@ public class PartitionUtil {
             throws UserException {
         if (table.isNativeTableOrMaterializedView()) {
             return ((OlapTable) table).getListPartitionMap();
-        } else if (table.isHiveTable() || table.isHudiTable() || table.isIcebergTable()) {
+        } else if (table.isHiveTable() || table.isHudiTable() || table.isIcebergTable() || table.isPaimonTable()) {
             return PartitionUtil.getMVPartitionNameWithList(table, partitionColumn, getPartitionNames(table));
         } else {
             throw new DmlException("Can not get partition list from table with type : %s", table.getType());
