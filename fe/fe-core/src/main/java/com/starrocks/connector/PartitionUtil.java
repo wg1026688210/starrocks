@@ -260,7 +260,7 @@ public class PartitionUtil {
             if (partitionNames.size() == 0) {
                 return Lists.newArrayList(jdbcTable.getJdbcTable());
             }
-        }else if (table.isPaimonTable()) {
+        } else if (table.isPaimonTable()) {
             PaimonTable paimonTable = (PaimonTable) table;
             if (paimonTable.isUnPartitioned()) {
                 // return table name if table is unpartitioned
@@ -330,7 +330,8 @@ public class PartitionUtil {
             throws UserException {
         if (table.isNativeTableOrMaterializedView()) {
             return ((OlapTable) table).getRangePartitionMap();
-        } else if (table.isHiveTable() || table.isHudiTable() || table.isIcebergTable() || table.isJDBCTable() || table.isPaimonTable()) {
+        } else if (table.isHiveTable() || table.isHudiTable() || table.isIcebergTable() || table.isJDBCTable() ||
+                table.isPaimonTable()) {
             return PartitionUtil.getRangePartitionMapOfExternalTable(table, partitionColumn, getPartitionNames(table));
         } else {
             throw new DmlException("Can not get partition range from table with type : %s", table.getType());

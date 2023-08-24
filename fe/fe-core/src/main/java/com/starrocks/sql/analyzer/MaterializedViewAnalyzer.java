@@ -115,6 +115,7 @@ public class MaterializedViewAnalyzer {
                     Table.TableType.ICEBERG,
                     Table.TableType.JDBC,
                     Table.TableType.MYSQL,
+                    Table.TableType.PAIMON,
                     Table.TableType.VIEW);
 
     public static void analyze(StatementBase stmt, ConnectContext session) {
@@ -862,7 +863,7 @@ public class MaterializedViewAnalyzer {
                                 baseTableInfo.getDbName(), table.getName()));
                         break;
                     }
-                } else if (table.isPaimonTable()){
+                } else if (table.isPaimonTable()) {
                     PaimonTable paimonTable = (PaimonTable) table;
                     if (paimonTable.getCatalogName().equals(baseTableInfo.getCatalogName()) &&
                             paimonTable.getDbName().equals(baseTableInfo.getDbName()) &&

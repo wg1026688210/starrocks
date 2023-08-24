@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 package com.starrocks.scheduler;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -152,6 +151,7 @@ public class PartitionBasedMvRefreshProcessor extends BaseTaskRunProcessor {
     public MvTaskRunContext getMvContext() {
         return mvContext;
     }
+
     @VisibleForTesting
     public void setMvContext(MvTaskRunContext mvContext) {
         this.mvContext = mvContext;
@@ -350,7 +350,7 @@ public class PartitionBasedMvRefreshProcessor extends BaseTaskRunProcessor {
             endPartitionName = startPartitionName;
             partitionsToRefresh.remove(endPartitionName);
         }
-        while (partitionNameIter.hasNext())  {
+        while (partitionNameIter.hasNext()) {
             endPartitionName = partitionNameIter.next();
             partitionsToRefresh.remove(endPartitionName);
         }
@@ -433,7 +433,7 @@ public class PartitionBasedMvRefreshProcessor extends BaseTaskRunProcessor {
                 Set<String> realPartitionNames =
                         e.getValue().stream()
                                 .flatMap(name -> convertMVPartitionNameToRealPartitionName(e.getKey(), name).stream())
-                        .collect(Collectors.toSet());;
+                                .collect(Collectors.toSet());
                 baseTableAndPartitionNames.put(e.getKey(), realPartitionNames);
             }
             Map<Table, Set<String>> nonRefTableAndPartitionNames = getNonRefTableRefreshPartitions();
@@ -1547,7 +1547,7 @@ public class PartitionBasedMvRefreshProcessor extends BaseTaskRunProcessor {
             } else if (entry.getKey().isJDBCTable()) {
                 JDBCTable jdbcTable = (JDBCTable) entry.getKey();
                 Optional<BaseTableInfo> baseTableInfoOptional = materializedView.getBaseTableInfos().stream().filter(
-                        baseTableInfo -> baseTableInfo.getTableIdentifier().equals(jdbcTable.getTableIdentifier())).
+                                baseTableInfo -> baseTableInfo.getTableIdentifier().equals(jdbcTable.getTableIdentifier())).
                         findAny();
                 if (!baseTableInfoOptional.isPresent()) {
                     continue;
