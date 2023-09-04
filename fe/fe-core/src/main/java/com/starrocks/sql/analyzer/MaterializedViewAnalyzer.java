@@ -154,11 +154,11 @@ public class MaterializedViewAnalyzer {
                 continue;
             }
 
-            if (!FeConstants.isReplayFromQueryDump && isExternalTableFromResource(table)) {
-                throw new SemanticException(
-                        "Only supports creating materialized views based on the external table " +
-                                "which created by catalog", tableNameInfo.getPos());
-            }
+//            if (!FeConstants.isReplayFromQueryDump && isExternalTableFromResource(table)) {
+//                throw new SemanticException(
+//                        "Only supports creating materialized views based on the external table " +
+//                                "which created by catalog", tableNameInfo.getPos());
+//            }
             baseTableInfos.add(BaseTableInfo.fromTableName(tableNameInfo, table));
         }
         processViews(queryStatement, baseTableInfos, withCheck);
