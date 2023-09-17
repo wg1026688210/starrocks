@@ -52,20 +52,17 @@ public class RowDataConverter {
             InternalRow.FieldGetter fieldGetter = this.fieldGetters.get(name);
             Object o = fieldGetter.getFieldOrNull(rowData);
             DataType dataType = dataTypes.get(name);
-            CastExecutor<Object, Object> executor = (CastExecutor<Object, Object>) CastExecutors
-                    .resolve(dataType, DataTypes.STRING());
             String value;
-            if (executor != null) {
-                value = o == null ? "null" : (String) executor.cast(o);
-            } else if (dataType.getTypeRoot() == DataTypeRoot.DATE) {
-                SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd");
-                if (o != null) {
-                    value = simpleDateFormat.format(DateTimeUtils.toSQLDate((Integer) o));
-                } else {
-                    value = null;
-                }
+            if (o == null) {
+                value = "null";
             } else {
-                value = o == null ? "null" : String.valueOf(o);
+                CastExecutor<Object, Object> executor =
+                        (CastExecutor<Object, Object>) CastExecutors.resolve(dataType, DataTypes.STRING());
+                if (executor != null) {
+                    value = (String) executor.cast(o);
+                } else {
+                    value = String.valueOf(o);
+                }
             }
             result.add(value);
         }
