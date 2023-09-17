@@ -14,10 +14,17 @@
 
 package com.starrocks.connector.paimon;
 
+import org.apache.paimon.casting.CastExecutor;
+import org.apache.paimon.casting.CastExecutors;
 import org.apache.paimon.data.InternalRow;
+import org.apache.paimon.types.DataType;
+import org.apache.paimon.types.DataTypeRoot;
+import org.apache.paimon.types.DataTypes;
 import org.apache.paimon.types.RowType;
+import org.apache.paimon.utils.DateTimeUtils;
 import org.apache.paimon.utils.InternalRowUtils;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -25,13 +32,17 @@ import java.util.Map;
 
 public class RowDataConverter {
     private final Map<String, InternalRow.FieldGetter> fieldGetters;
+    private final Map<String, DataType> dataTypes;
 
     public RowDataConverter(RowType rowType) {
         int fieldCount = rowType.getFieldCount();
         this.fieldGetters = new HashMap<>(fieldCount);
+        this.dataTypes = new HashMap<>();
+
         for (int i = 0; i < fieldCount; i++) {
             this.fieldGetters.put(rowType.getFields().get(i).name(),
                     InternalRowUtils.createNullCheckingFieldGetter(rowType.getTypeAt(i), i));
+            this.dataTypes.put(rowType.getFieldNames().get(i), rowType.getFieldTypes().get(i));
         }
     }
 
@@ -40,7 +51,22 @@ public class RowDataConverter {
         for (String name : requiredNames) {
             InternalRow.FieldGetter fieldGetter = this.fieldGetters.get(name);
             Object o = fieldGetter.getFieldOrNull(rowData);
-            String value = o == null ? "null" : o.toString();
+            DataType dataType = dataTypes.get(name);
+            CastExecutor<Object, Object> executor = (CastExecutor<Object, Object>) CastExecutors
+                    .resolve(dataType, DataTypes.STRING());
+            String value;
+            if (executor != null) {
+                value = o == null ? "null" : (String) executor.cast(o);
+            } else if (dataType.getTypeRoot() == DataTypeRoot.DATE) {
+                SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd");
+                if (o != null) {
+                    value = simpleDateFormat.format(DateTimeUtils.toSQLDate((Integer) o));
+                } else {
+                    value = null;
+                }
+            } else {
+                value = o == null ? "null" : String.valueOf(o);
+            }
             result.add(value);
         }
         return result;
