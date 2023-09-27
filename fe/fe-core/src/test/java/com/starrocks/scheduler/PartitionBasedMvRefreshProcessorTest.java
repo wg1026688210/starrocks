@@ -19,6 +19,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.starrocks.analysis.TableName;
 import com.starrocks.catalog.BaseTableInfo;
+import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.LocalTablet;
 import com.starrocks.catalog.MaterializedIndex;
@@ -57,10 +58,34 @@ import mockit.Mock;
 import mockit.MockUp;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.paimon.catalog.Catalog;
+import org.apache.paimon.catalog.CatalogContext;
+import org.apache.paimon.catalog.CatalogFactory;
+import org.apache.paimon.catalog.Identifier;
+import org.apache.paimon.data.BinaryString;
+import org.apache.paimon.data.GenericRow;
+import org.apache.paimon.data.InternalRow;
+import org.apache.paimon.options.CatalogOptions;
+import org.apache.paimon.options.Options;
+import org.apache.paimon.reader.RecordReader;
+import org.apache.paimon.schema.Schema;
+import org.apache.paimon.shade.guava30.com.google.common.collect.Lists;
+import org.apache.paimon.table.sink.BatchTableCommit;
+import org.apache.paimon.table.sink.BatchTableWrite;
+import org.apache.paimon.table.source.ReadBuilder;
+import org.apache.paimon.table.source.TableScan;
+import org.apache.paimon.types.DataField;
+import org.apache.paimon.types.DataTypes;
+import org.apache.paimon.types.RowType;
 import org.junit.Assert;
 import org.junit.BeforeClass;
+import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
+import java.io.File;
+import java.io.IOException;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -76,6 +101,50 @@ public class PartitionBasedMvRefreshProcessorTest {
     private static ConnectContext connectContext;
     private static StarRocksAssert starRocksAssert;
 
+    @ClassRule
+    public static TemporaryFolder temp = new TemporaryFolder();
+    public static void createPaimonTable(String warehouse,String db,String tbl) throws Exception {
+        Options catalogOptions = new Options();
+        catalogOptions.set(CatalogOptions.WAREHOUSE, warehouse);
+        CatalogContext catalogContext = CatalogContext.create(catalogOptions);
+        Catalog catalog = CatalogFactory.createCatalog(catalogContext);
+        catalog.createDatabase(db, false);
+
+        // create table
+        Identifier identifier = Identifier.create(db, tbl);
+        Schema schema = new Schema(
+                Lists.newArrayList(
+                        new DataField(0, "pk", DataTypes.STRING(), "field1"),
+                        new DataField(1, "d", DataTypes.STRING(), "field2"),
+                        new DataField(2, "pt", DataTypes.DATE(), "field3")),
+                Lists.newArrayList("pt"),
+                Lists.newArrayList("pk", "pt"),
+                org.apache.paimon.shade.guava30.com.google.common.collect.Maps.newHashMap(),
+                "");
+        catalog.createTable(
+                identifier,
+                schema,
+                false);
+        // create table
+        org.apache.paimon.table.Table table = catalog.getTable(identifier);
+        BatchTableWrite batchTableWrite = table.newBatchWriteBuilder().newWrite();
+        BatchTableCommit batchTableCommit = table.newBatchWriteBuilder().newCommit();
+        for (int i = 0; i < 10; i++) {
+            GenericRow genericRow = new GenericRow(3);
+            genericRow.setField(0,BinaryString.fromString("1"));
+            genericRow.setField(1, BinaryString.fromString("2"));
+            genericRow.setField(2,(int) LocalDate.now().toEpochDay()+i);
+            batchTableWrite.write(genericRow);
+        }
+        batchTableCommit.commit(batchTableWrite.prepareCommit());
+    }
+
+    @Test
+    public void test () throws Exception {
+
+
+    }
+
     @BeforeClass
     public static void beforeClass() throws Exception {
         FeConstants.runningUnitTest = true;
@@ -84,13 +153,24 @@ public class PartitionBasedMvRefreshProcessorTest {
         connectContext = UtFrameUtils.createDefaultCtx();
         ConnectorPlanTestBase.mockCatalog(connectContext);
         starRocksAssert = new StarRocksAssert(connectContext);
-
         if (!starRocksAssert.databaseExist("_statistics_")) {
             StatisticsMetaManager m = new StatisticsMetaManager();
             m.createStatisticsTablesForTest();
         }
         starRocksAssert.withDatabase("test");
         starRocksAssert.useDatabase("test");
+
+        File file = temp.newFolder();
+        String warehouse = file.toURI().toString();
+
+        starRocksAssert.withCatalog("CREATE EXTERNAL CATALOG paimon_catalog\n" +
+                "        properties\n" +
+                "                (\n" +
+                "                        \"type\" = \"paimon\",\n" +
+                "                        \"paimon.catalog.type\" = \"filesystem\",\n" +
+                "                        \"paimon.catalog.warehouse\" = \""+warehouse+"\"\n" +
+                "                );");
+        createPaimonTable(warehouse,"pmn_db1","pmn_tbl1");
 
         starRocksAssert.withTable("CREATE TABLE test.tbl1\n" +
                         "(\n" +
@@ -656,6 +736,22 @@ public class PartitionBasedMvRefreshProcessorTest {
         Assert.assertTrue(plan.contains("4:HASH JOIN"));
     }
 
+    @Test
+    public void testCreatePmnMaterializeView() throws Exception {
+        starRocksAssert.useDatabase("test").withMaterializedView("CREATE MATERIALIZED VIEW `test`.`paimon_parttbl_mv1`\n" +
+                "COMMENT \"MATERIALIZED_VIEW\"\n" +
+                "PARTITION BY (`pt`)\n" +
+                "DISTRIBUTED BY HASH(`pk`) BUCKETS 10\n" +
+                "REFRESH DEFERRED MANUAL\n" +
+                "PROPERTIES (\n" +
+                "\"replication_num\" = \"1\",\n" +
+                "\"storage_medium\" = \"HDD\"\n" +
+                ")\n" +
+                "AS SELECT d  FROM `paimon_catalog`.`pmn_db1`.`pmn_tbl1` as a;");
+        Database testDb = GlobalStateMgr.getCurrentState().getDb("test");
+        MaterializedView materializedView = ((MaterializedView) testDb.getTable("paimon_parttbl_mv1"));
+        Pair<Table, Column> baseTableAndPartitionColumn = materializedView.getBaseTableAndPartitionColumn();
+    }
     @Test
     public void testAutoPartitionRefreshWithPartitionChanged() throws Exception {
         starRocksAssert.useDatabase("test").withMaterializedView("CREATE MATERIALIZED VIEW `test`.`hive_parttbl_mv1`\n" +
