@@ -423,7 +423,7 @@ public class PartitionUtil {
         boolean isConvertToDate = isConvertToDate(partitionExpr, partitionColumn);
         LinkedHashMap<String, PartitionKey> sortedPartitionLinkMap = mvPartitionKeyMap.entrySet().stream()
                 .sorted(Map.Entry.comparingByValue(PartitionKey::compareTo))
-                .filter(entry ->isConvertToDate &&canConvertDate(entry))
+                .filter(entry -> isConvertToDate && canConvertDate(entry))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (e1, e2) -> e1, LinkedHashMap::new));
         int index = 0;
         PartitionKey lastPartitionKey = null;
@@ -470,11 +470,11 @@ public class PartitionUtil {
     }
 
     private static boolean canConvertDate(Map.Entry<String, PartitionKey> entry) {
-        boolean filted =true;
+        boolean filted = true;
         try {
             convertToDate(entry.getValue());
-        }catch (Exception e){
-            filted =false;
+        } catch (Exception e) {
+            filted = false;
         }
         return filted;
     }
